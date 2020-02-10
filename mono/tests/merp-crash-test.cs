@@ -352,6 +352,25 @@ class C
 		}
 	}
 
+	public static void TestManagedException ()
+	{
+		if (Directory.Exists (configDir)) {
+			Console.WriteLine ("Cleaning up left over configDir {0}", configDir);
+			Cleanup (configDir);
+		}
+		Directory.CreateDirectory (configDir);
+
+		SetupCrash (configDir);
+		var monoType = Type.GetType ("Mono.Runtime", false);
+		var m = monoType.GetMethod ("SendExceptionToTelemetry", BindingFlags.NonPublic | BindingFlags.Static);
+		var exception = new Exception ("test managed exception");
+		var m_params = new object[] { exception };
+
+		m.Invoke (null, m_params);
+		DumpLogCheck ();
+		Cleanup (configDir);
+	}
+
 	public static int Main (string [] args)
 	{
 		if (args.Length == 0) {
@@ -376,9 +395,25 @@ class C
 				}
 			}
 
+			// Also test sending a managed exception
+			Exception exception_test_failure = null;
+
+			try {
+				TestManagedException();
+			}
+			catch (Exception e)
+			{
+				exception_test_failure = e;
+			}
+
 			Console.WriteLine ("\n\n##################");
 			Console.WriteLine ("Merp Test Results:");
 			Console.WriteLine ("##################\n\n");
+
+			if (exception_test_failure != null)
+			{
+				Console.WriteLine ("Sending managed exception to MERP failed: {0}\n{1}\n", exception_test_failure.Message, exception_test_failure.StackTrace);
+			}
 
 			if (failure_count > 0) {
 				for (int i=0; i < CrasherClass.Crashers.Count; i++) {
@@ -389,7 +424,7 @@ class C
 				}
 			}
 
-			if (failure_count > 0)
+			if (failure_count > 0 || exception_test_failure != null)
 				return 1;
 
 			Console.WriteLine ("\n\n##################");
